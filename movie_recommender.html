@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CineMatch — Movie Recommender</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: rgba(255,255,255,0.07);
+    --gold: #c9a84c;
+    --gold-dim: rgba(201,168,76,0.15);
+    --gold-glow: rgba(201,168,76,0.4);
+    --text: #e8e4da;
+    --text-muted: #7a7870;
+    --red: #e05252;
+    --green: #52c97a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.6;
+  }
+
+  /* Ambient glow */
+  .ambient {
+    position: fixed;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(201,168,76,0.06) 0%, transparent 70%);
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  header {
+    padding: 48px 24px 24px;
+    text-align: center;
+    position: relative;
+  }
+
+  .logo-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    opacity: 0.85;
+  }
+
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  h1 span {
+    color: var(--gold);
+    font-style: italic;
+  }
+
+  .subtitle {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  .divider {
+    width: 60px;
+    height: 1px;
+    background: var(--gold);
+    margin: 20px auto;
+    opacity: 0.4;
+  }
+
+  /* Search area */
+  .search-container {
+    max-width: 680px;
+    margin: 0 auto 48px;
+    padding: 0 24px;
+  }
+
+  .search-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .search-box {
+    position: relative;
+    display: flex;
+    gap: 0;
+  }
+
+  .search-input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-right: none;
+    border-radius: 4px 0 0 4px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1rem;
+    padding: 16px 20px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-input::placeholder { color: var(--text-muted); }
+
+  .search-input:focus {
+    border-color: rgba(201,168,76,0.4);
+  }
+
+  .search-btn {
+    background: var(--gold);
+    border: none;
+    border-radius: 0 4px 4px 0;
+    color: #0a0a0f;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 16px 28px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    white-space: nowrap;
+  }
+
+  .search-btn:hover { opacity: 0.85; }
+  .search-btn:active { transform: scale(0.98); }
+  .search-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* Suggestions */
+  .suggestions {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .suggestion-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    padding: 5px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .chip:hover {
+    border-color: rgba(201,168,76,0.4);
+    color: var(--gold);
+    background: var(--gold-dim);
+  }
+
+  /* Status / loading */
+  .status {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 2px solid var(--border);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg {
+    color: var(--red);
+    background: rgba(224,82,82,0.08);
+    border: 1px solid rgba(224,82,82,0.2);
+    border-radius: 4px;
+    padding: 14px 20px;
+    font-size: 0.88rem;
+    max-width: 680px;
+    margin: 0 auto 32px;
+    text-align: center;
+  }
+
+  /* Results */
+  .results-section {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  .results-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+  }
+
+  .results-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem;
+    font-weight: 400;
+  }
+
+  .results-title em {
+    color: var(--gold);
+    font-style: italic;
+  }
+
+  .results-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-left: auto;
+  }
+
+  .movies-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  .movie-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
+    animation: cardIn 0.4s ease both;
+    cursor: default;
+  }
+
+  .movie-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(201,168,76,0.3);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(201,168,76,0.1);
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .card-poster {
+    width: 100%;
+    aspect-ratio: 2/3;
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: opacity 0.3s;
+  }
+
+  .poster-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .poster-placeholder svg {
+    opacity: 0.3;
+  }
+
+  .card-rank {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(10,10,15,0.85);
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    padding: 3px 8px;
+    border-radius: 2px;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .similarity-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gold), rgba(201,168,76,0.3));
+    transition: width 0.6s ease;
+  }
+
+  .card-body {
+    padding: 16px;
+  }
+
+  .card-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+
+  .card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .tag {
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: var(--gold-dim);
+    border: 1px solid rgba(201,168,76,0.2);
+    color: var(--gold);
+    padding: 2px 7px;
+    border-radius: 2px;
+  }
+
+  .tag.crew-tag {
+    background: rgba(82,201,122,0.08);
+    border-color: rgba(82,201,122,0.2);
+    color: var(--green);
+  }
+
+  .card-reason {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    margin-top: 2px;
+  }
+
+  .score-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .score-label {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .score-track {
+    flex: 1;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .score-fill {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 2px;
+    transition: width 0.8s ease;
+  }
+
+  .score-value {
+    font-size: 0.72rem;
+    color: var(--gold);
+    font-variant-numeric: tabular-nums;
+    min-width: 32px;
+    text-align: right;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 80px 24px;
+    color: var(--text-muted);
+  }
+
+  .empty-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    opacity: 0.3;
+  }
+
+  .empty-state h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.4rem;
+    font-weight: 400;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .empty-state p {
+    font-size: 0.88rem;
+    max-width: 360px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* How it works */
+  .how-it-works {
+    max-width: 680px;
+    margin: 0 auto 48px;
+    padding: 0 24px;
+  }
+
+  .how-title {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .how-pills {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .how-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 6px 14px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .how-pill span { color: var(--gold); }
+</style>
+</head>
+<body>
+
+<div class="ambient"></div>
+
+<header>
+  <div class="logo-line">
+    <svg class="logo-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" stroke="#c9a84c" stroke-width="1.5" fill="none"/>
+      <circle cx="16" cy="16" r="5" fill="#c9a84c" opacity="0.8"/>
+      <line x1="16" y1="2" x2="16" y2="8" stroke="#c9a84c" stroke-width="1.5"/>
+      <line x1="16" y1="24" x2="16" y2="30" stroke="#c9a84c" stroke-width="1.5"/>
+      <line x1="2" y1="16" x2="8" y2="16" stroke="#c9a84c" stroke-width="1.5"/>
+      <line x1="24" y1="16" x2="30" y2="16" stroke="#c9a84c" stroke-width="1.5"/>
+    </svg>
+    <h1>Cine<span>Match</span></h1>
+  </div>
+  <p class="subtitle">Content-Based Movie Recommender</p>
+  <div class="divider"></div>
+</header>
+
+<div class="search-container">
+  <label class="search-label" for="movieInput">Enter a movie title</label>
+  <div class="search-box">
+    <input
+      type="text"
+      id="movieInput"
+      class="search-input"
+      placeholder="e.g. The Dark Knight, Inception, Avatar…"
+      autocomplete="off"
+    />
+    <button class="search-btn" id="searchBtn" onclick="getRecommendations()">
+      Recommend →
+    </button>
+  </div>
+  <div class="suggestions">
+    <span class="suggestion-label">Try:</span>
+    <span class="chip" onclick="quickSearch('The Dark Knight')">The Dark Knight</span>
+    <span class="chip" onclick="quickSearch('Inception')">Inception</span>
+    <span class="chip" onclick="quickSearch('Avatar')">Avatar</span>
+    <span class="chip" onclick="quickSearch('The Avengers')">The Avengers</span>
+    <span class="chip" onclick="quickSearch('Interstellar')">Interstellar</span>
+    <span class="chip" onclick="quickSearch('Parasite')">Parasite</span>
+  </div>
+</div>
+
+
+
+<div id="statusArea"></div>
+<div id="errorArea"></div>
+<div id="resultsArea" class="results-section"></div>
+
+<script>
+  const TMDB_KEY = "3e946bf60052429d208af3ba0c99934e";
+  const TMDB_IMG = "https://image.tmdb.org/t/p/w342";
+
+  function quickSearch(title) {
+    document.getElementById('movieInput').value = title;
+    getRecommendations();
+  }
+
+  document.getElementById('movieInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') getRecommendations();
+  });
+
+
+  // ── TMDB helpers ──────────────────────────────────────────────
+  async function tmdb(path) {
+    const sep = path.includes('?') ? '&' : '?';
+    const res = await fetch(
+      `https://api.themoviedb.org/3${path}${sep}api_key=${TMDB_KEY}&language=en-US`,
+      { headers: { 'Accept': 'application/json' }, mode: 'cors' }
+    );
+    if (!res.ok) throw new Error(`TMDB ${res.status}: ${path}`);
+    return res.json();
+  }
+
+  // ── Main recommendation flow ───────────────────────────────────
+  async function getRecommendations() {
+    const query = document.getElementById('movieInput').value.trim();
+    if (!query) return;
+
+    const btn        = document.getElementById('searchBtn');
+    const statusArea = document.getElementById('statusArea');
+    const errorArea  = document.getElementById('errorArea');
+    const resultsArea= document.getElementById('resultsArea');
+
+    btn.disabled = true;
+    errorArea.innerHTML  = '';
+    resultsArea.innerHTML= '';
+    statusArea.innerHTML = `
+      <div class="status">
+        <div class="spinner"></div>
+        <div>Searching for <em style="color:var(--gold)">${query}</em>…</div>
+      </div>`;
+
+    try {
+      // 1. Search for the input movie
+      const searchData = await tmdb(`/search/movie?query=${encodeURIComponent(query)}`);
+      if (!searchData.results.length) throw new Error('Movie not found on TMDB.');
+      const input = searchData.results[0];
+      const movieId = input.id;
+
+      statusArea.innerHTML = `
+        <div class="status">
+          <div class="spinner"></div>
+          <div>Found <em style="color:var(--gold)">${input.title}</em> — fetching details…</div>
+        </div>`;
+
+      // 2. Fetch details, keywords, credits, and recommendations in parallel
+      const [details, keywords, credits, similar] = await Promise.all([
+        tmdb(`/movie/${movieId}`),
+        tmdb(`/movie/${movieId}/keywords`),
+        tmdb(`/movie/${movieId}/credits`),
+        tmdb(`/movie/${movieId}/recommendations`)
+      ]);
+
+      // 3. Extract input tags (mirrors your notebook's feature extraction)
+      const inputGenres   = details.genres.map(g => g.name);
+      const inputKeywords = keywords.keywords.slice(0, 5).map(k => k.name);
+      const inputCast     = credits.cast.slice(0, 3).map(c => c.name);
+      const directorObj   = credits.crew.find(c => c.job === 'Director');
+      const inputDirector = directorObj ? directorObj.name : '';
+
+      // 4. Score each recommended movie using cosine-similarity-style tag overlap
+      const recs = similar.results.slice(0, 20);
+
+      // Fetch genres for each rec (already in results), compute match score
+      const scored = recs.map(r => {
+        const recGenres = r.genre_ids || [];
+        const inputGenreIds = details.genres.map(g => g.id);
+        const genreOverlap = recGenres.filter(id => inputGenreIds.includes(id)).length;
+        const maxGenres    = Math.max(inputGenreIds.length, recGenres.length, 1);
+        // Weighted score: genre overlap (main signal) + vote normalisation
+        const genreScore   = genreOverlap / maxGenres;
+        const popScore     = Math.min((r.vote_average || 0) / 10, 1) * 0.2;
+        const similarity   = Math.min(genreScore * 0.8 + popScore, 0.99);
+        return { ...r, similarity };
+      });
+
+      // Sort by similarity desc, take top 5
+      scored.sort((a, b) => b.similarity - a.similarity);
+      const top5 = scored.slice(0, 5);
+
+      // 5. Fetch full credits for each top-5 to get director + cast
+      const top5Details = await Promise.all(
+        top5.map(m => tmdb(`/movie/${m.id}/credits`).catch(() => ({ crew: [], cast: [] })))
+      );
+
+      statusArea.innerHTML = '';
+
+      renderResults({
+        input,
+        inputTags: { genres: inputGenres, keywords: inputKeywords, cast: inputCast, director: inputDirector },
+        recommendations: top5.map((m, i) => {
+          const cr       = top5Details[i];
+          const director = (cr.crew.find(c => c.job === 'Director') || {}).name || '';
+          const cast     = cr.cast.slice(0, 3).map(c => c.name);
+          const genres   = (m.genre_ids || []).map(id => {
+            const g = details.genres.find(g => g.id === id);
+            return g ? g.name : null;
+          }).filter(Boolean);
+          return { rank: i + 1, movie: m, director, cast, genres, similarity: m.similarity };
+        })
+      });
+
+    } catch (err) {
+      statusArea.innerHTML = '';
+      errorArea.innerHTML  = `<div class="error-msg">⚠ ${err.message || 'Could not fetch recommendations. Please try again.'}</div>`;
+      console.error(err);
+    }
+
+    btn.disabled = false;
+  }
+
+  // ── Render ─────────────────────────────────────────────────────
+  function renderResults({ input, inputTags, recommendations }) {
+    const area = document.getElementById('resultsArea');
+    if (!recommendations.length) {
+      area.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">🎬</div>
+        <h3>No recommendations found</h3>
+        <p>Try a different movie title.</p>
+      </div>`;
+      return;
+    }
+
+    const tagLine = [
+      ...inputTags.genres,
+      ...inputTags.keywords.slice(0, 3),
+      inputTags.director,
+      ...inputTags.cast
+    ].filter(Boolean).join(' · ');
+
+    area.innerHTML = `
+      <div class="results-header">
+        <div class="results-title">Because you liked <em>${input.title}</em></div>
+        <div class="results-count">${recommendations.length} matches</div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:24px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:6px;">
+        <div id="inputPosterWrap" style="width:60px;min-width:60px;height:90px;background:var(--surface2);border-radius:4px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+          ${input.poster_path
+            ? `<img src="${TMDB_IMG}${input.poster_path}" style="width:100%;height:100%;object-fit:cover;" />`
+            : `<svg width="24" height="24" viewBox="0 0 40 40" fill="none" style="opacity:0.2"><rect x="4" y="8" width="32" height="26" rx="2" stroke="currentColor" stroke-width="1.5"/><circle cx="20" cy="21" r="6" stroke="currentColor" stroke-width="1.5"/></svg>`
+          }
+        </div>
+        <div>
+          <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">You searched for</div>
+          <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--gold);margin-bottom:8px">${input.title} ${input.release_date ? `<span style="font-size:0.75rem;color:var(--text-muted)">(${input.release_date.slice(0,4)})</span>` : ''}</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);line-height:1.7">Tags: <span style="color:var(--text)">${tagLine}</span></div>
+        </div>
+      </div>
+      <div class="movies-grid" id="moviesGrid"></div>`;
+
+    const grid = document.getElementById('moviesGrid');
+
+    recommendations.forEach(({ rank, movie, director, cast, genres, similarity }) => {
+      const score = Math.round(similarity * 100);
+      const year  = movie.release_date ? movie.release_date.slice(0, 4) : '';
+      const genreTags   = genres.slice(0, 3).map(g => `<span class="tag">${g}</span>`).join('');
+      const directorTag = director ? `<span class="tag crew-tag">🎬 ${director}</span>` : '';
+      const castLine    = cast.length ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">⭐ ${cast.join(', ')}</div>` : '';
+      const overview    = (movie.overview || '').slice(0, 100) + (movie.overview?.length > 100 ? '…' : '');
+
+      const card = document.createElement('div');
+      card.className = 'movie-card';
+      card.style.animationDelay = `${(rank - 1) * 0.07}s`;
+
+      card.innerHTML = `
+        <div class="card-poster" style="position:relative;">
+          <div class="poster-placeholder" style="display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--text-muted);font-size:0.72rem;letter-spacing:0.06em;text-transform:uppercase;text-align:center;padding:20px;aspect-ratio:2/3;justify-content:center;">
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style="opacity:0.3">
+              <rect x="4" y="8" width="32" height="26" rx="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="20" cy="21" r="6" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="8" y="4" width="4" height="6" rx="1" fill="currentColor" opacity="0.4"/>
+              <rect x="28" y="4" width="4" height="6" rx="1" fill="currentColor" opacity="0.4"/>
+            </svg>
+            <div>${movie.title}</div>
+          </div>
+          <div class="card-rank">#${rank}</div>
+          <div class="similarity-bar" style="width:${score}%;position:absolute;bottom:0;left:0;height:3px;background:linear-gradient(90deg,var(--gold),rgba(201,168,76,0.3));"></div>
+        </div>
+        <div class="card-body">
+          <div class="card-title">${movie.title}${year ? ` <span style="font-size:0.75rem;color:var(--text-muted);font-weight:300">(${year})</span>` : ''}</div>
+          <div class="card-meta">${genreTags}${directorTag}</div>
+          ${castLine}
+          <div class="card-reason" style="margin-top:8px;">${overview}</div>
+          <div class="score-row">
+            <span class="score-label">Match</span>
+            <div class="score-track"><div class="score-fill" style="width:${score}%"></div></div>
+            <span class="score-value">${score}%</span>
+          </div>
+        </div>`;
+
+      grid.appendChild(card);
+
+      // Inject poster if available
+      if (movie.poster_path) {
+        const posterDiv   = card.querySelector('.card-poster');
+        const placeholder = card.querySelector('.poster-placeholder');
+        const img = new Image();
+        img.src = TMDB_IMG + movie.poster_path;
+        img.alt = movie.title;
+        Object.assign(img.style, {
+          opacity: '0', position: 'absolute', inset: '0',
+          width: '100%', height: '100%', objectFit: 'cover',
+          transition: 'opacity 0.5s ease'
+        });
+        img.onload = () => {
+          posterDiv.insertBefore(img, placeholder);
+          placeholder.style.display = 'none';
+          requestAnimationFrame(() => img.style.opacity = '1');
+        };
+      }
+    });
+  }
+</script>
+</body>
+</html>
