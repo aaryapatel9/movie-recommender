@@ -5,6 +5,13 @@ import pickle
 import pandas as pd
 import requests
 
+import gdown
+import os
+
+if not os.path.exists("similarity.pkl"):
+    url = "https://drive.google.com/drive/folders/1Gp0WojVGi4AfwyXrc3Pv4XDoxK3fwX3p?usp=sharing"
+    gdown.download(url, "similarity.pkl", quiet=False)
+
 def fetch_poster(movie_id):
     api_key = "3e946bf60052429d208af3ba0c99934e"
     url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={api_key}"
@@ -33,7 +40,12 @@ def recommend(movie):
 
 movies = pickle.load(open('movies.pkl', 'rb'))
 movies_dict = movies['title'].values
-similarity = pickle.load(open('similarity.pkl', 'rb'))
+
+@st.cache_resource
+def load_similarity():
+    return pickle.load(open('similarity.pkl', 'rb'))
+
+similarity = load_similarity()
 
 st.title('Movie Recommender System')
 
